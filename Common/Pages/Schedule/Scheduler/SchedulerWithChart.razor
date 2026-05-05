@@ -1,0 +1,329 @@
+@page "/scheduler/scheduler-with-chart"
+@using Syncfusion.Blazor.Schedule
+@using Syncfusion.Blazor.Charts
+@using Syncfusion.Blazor.DropDowns
+@using SchedulerWithChartApp.Data
+
+<PageTitle>Scheduler With Chart</PageTitle>
+<div class="col-lg-12 schedule-with-chart control-section">
+    <div class="content-wrapper">
+        <div class="control-section modern-layout">
+
+            <!-- Scheduler -->
+            <div id="scheduler" class="scheduler-wrapper">
+                <SfSchedule TValue="TruckEvent"
+                            Height="650px"
+                            Width="100%"
+                            SelectedDate="@SelectedDate"
+                            AllowOverlap="false">
+
+                    <ScheduleResources>
+                        <ScheduleResource TItem="TruckDriver"
+                                          TValue="int"
+                                          Field="DriverId"
+                                          Name="TruckDetails"
+                                          Title="Driver"
+                                          AllowMultiple="false"
+                                          DataSource="@Drivers"
+                                          TextField="Driver"
+                                          IdField="Id"
+                                          ColorField="Color" />
+                    </ScheduleResources>
+
+                    <ScheduleGroup Resources="@GroupData" />
+
+                    <ScheduleViews>
+                        <ScheduleView Option="View.TimelineMonth" />
+                    </ScheduleViews>
+
+                    <ScheduleEventSettings DataSource="@TruckEvents" />
+
+                    <ScheduleTemplates>
+
+                        <HeaderIndentTemplate>
+                            <div class="template-wrap header-indent">
+                                <div class="name">Driver</div>
+                                <div class="type">Truck</div>
+                                <div class="capac">Capacity</div>
+                            </div>
+                        </HeaderIndentTemplate>
+
+                        <ResourceHeaderTemplate>
+                            @if (context.ResourceData is TruckDriver d)
+                            {
+                                <div class="template-wrap">
+                                    <div class="room-name">@d.Driver</div>
+                                    <div class="truck-type">@d.Truck</div>
+                                    <div class="capacity">@d.Capacity</div>
+                                </div>
+                            }
+                        </ResourceHeaderTemplate>
+
+                    </ScheduleTemplates>
+
+                    <ScheduleEvents ActionCompleted="ScheduleActionCompleted" />
+
+                </SfSchedule>
+            </div>
+
+            <!-- Chart -->
+            <div id="chart-container" class="chart-section">
+                <div class="chart-header">
+                    <h4 class="chart-title">Analytics</h4>
+
+                    <div id="chart-ddl" class="dropdown-wrapper">
+                        <SfDropDownList TValue="string"
+                                        TItem="string"
+                                        DataSource="@AnalyticsModes"
+                                        @bind-Value="CurrentMode"
+                                        Width="100%" />
+                    </div>
+                </div>
+
+                <div id="chart" class="chart-area">
+                    <SfChart @key="CurrentMode" Height="100%" Width="100%">
+                        <ChartTooltip Enable="true" />
+                        <ChartPrimaryXAxis
+                            ValueType="Syncfusion.Blazor.Charts.ValueType.Category" />
+                        <ChartPrimaryYAxis Title="@YAxisTitle" />
+
+                        <ChartSeriesCollection>
+                            <ChartSeries DataSource="@ChartData"
+                                         Type="ChartSeriesType.Column"
+                                         XName="Driver"
+                                         YName="Value"
+                                         Name="@ChartTitle"
+                                         PointColorMapping="Color"
+                                         EnableTooltip="true" />
+                        </ChartSeriesCollection>
+                    </SfChart>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateTime SelectedDate = new DateTime(2026, 1, 12);
+    private readonly string[] GroupData = { "TruckDetails" };
+
+    private List<TruckDriver> Drivers = new();
+    private List<TruckEvent> TruckEvents = new();
+    private List<object> ChartData = new();
+
+    private readonly List<string> AnalyticsModes = new()
+    {
+        "Trip Count",
+        "Capacity",
+        "Longest"
+    };
+
+    private string ChartTitle = "Trip Count";
+    private string YAxisTitle = "Count";
+
+    private bool _isChartUpdating;
+
+    private EventCallback<ActionEventArgs<TruckEvent>> ScheduleActionCompleted;
+    private string _currentMode = "Trip Count";
+    private string CurrentMode
+    {
+        get => _currentMode;
+        set
+        {
+            if (_currentMode == value) return;
+            _currentMode = value;
+            _ = GenerateChartDataSafeAsync();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Drivers = SchedulerWithChartData.GetDriversMaster();
+        // Remove events for Carlos (DriverId = 5)
+        TruckEvents = SchedulerWithChartData.GetTruckData().ToList();
+
+        ScheduleActionCompleted =
+            EventCallback.Factory.Create<ActionEventArgs<TruckEvent>>(
+                this, OnScheduleActionComplete);
+
+        await GenerateChartDataSafeAsync();
+    }
+    private async Task GenerateChartDataSafeAsync()
+    {
+        if (_isChartUpdating) return;
+        _isChartUpdating = true;
+
+        try
+        {
+            await InvokeAsync(() =>
+            {
+                switch (CurrentMode)
+                {
+                    case "Capacity":
+                        ChartTitle = "Truck Capacity";
+                        YAxisTitle = "Capacity (t)";
+                        ChartData = Drivers
+                            .Select(d => new { Driver = d.Driver, Value = double.Parse(d.Capacity.Replace(" t", "")), Color = d.Color })
+                            .Cast<object>()
+                            .ToList();
+                        break;
+
+                        case "Longest":
+                            ChartTitle = "Longest Trip (hours)";
+                            YAxisTitle = "Hours";
+                            ChartData = Drivers
+                                .Select(d => new
+                                {
+                                    Driver = d.Driver,
+                                    Value = TruckEvents.Where(e => e.DriverId == d.Id)
+
+                                                     .Sum(e => (e.EndTime - e.StartTime).TotalHours),
+                                    Color = d.Color
+                                })
+                                .Cast<object>()
+                                .ToList();
+                            break;
+
+                    default:
+                        ChartTitle = "Trip Count";
+                        YAxisTitle = "Count";
+                        ChartData = Drivers
+                            .Select(d => new
+                            {
+                                Driver = d.Driver,
+                                Value = TruckEvents.Count(e => e.DriverId == d.Id),
+                                Color = d.Color
+                            })
+                            .Cast<object>()
+                            .ToList();
+                        break;
+                }
+            });
+        }
+        finally
+        {
+            _isChartUpdating = false;
+        }
+    }
+    private async void OnScheduleActionComplete(ActionEventArgs<TruckEvent> args)
+    {
+        await GenerateChartDataSafeAsync();
+    }
+}
+
+<style>
+    /* ================= Scheduler Resource Layout ================= */
+/* ===================== Design System Variables ===================== */
+:root {
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --bg-light: #f8f9fa;
+  --bg-card: #ffffff;
+  --border-color: #e9ecef;
+  --text-primary: #212529;
+  --text-secondary: #6c757d;
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.15);
+  --transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  --border-radius: 12px;
+}
+
+/* ===================== Containers ===================== */
+.schedule-with-chart .control-section {
+  background: var(--bg-card);
+  border-radius: var(--border-radius);
+  padding: 10px;
+  overflow: hidden;
+}
+
+.schedule-with-chart .modern-layout {
+  display: flex;
+  gap: 16px;
+  align-items: stretch !important;
+}
+
+/* ===================== Scheduler ===================== */
+.schedule-with-chart .scheduler-wrapper {
+  flex: 1;
+  min-width: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Resource columns */
+.schedule-with-chart .e-schedule .e-resource-left-td {
+  padding: 0 !important;
+}
+
+.schedule-with-chart .e-schedule .template-wrap {
+  display: flex;
+  height: 100%;
+}
+
+.schedule-with-chart .e-schedule .template-wrap > div {
+  flex: 0 0 33.333%;
+  border-right: 1px solid var(--border-color);
+  padding-left: 8px;
+  font-size: 13px;
+  line-height: 58px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.schedule-with-chart .e-schedule .template-wrap > div:last-child {
+  border-right: 0;
+}
+
+.schedule-with-chart .e-schedule .header-indent > div {
+  line-height: 36px;
+  font-weight: 600;
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* ===================== Chart ===================== */
+.schedule-with-chart .chart-section {
+  width: 420px;
+  height: 650px;
+  background: linear-gradient(180deg,#fff 0%,#f8f9fa 100%);
+  border: 2px solid #e9ecef;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.schedule-with-chart .chart-section::before {
+  content:'';
+  position:absolute;
+  top:0; left:0; right:0;
+  height:2px;
+  background:linear-gradient(90deg,transparent,#667eea,transparent);
+  opacity:.3;
+}
+
+.schedule-with-chart .chart-header {
+  padding:16px;
+  border-bottom:2px solid #e9ecef;
+}
+
+.schedule-with-chart .chart-title {
+  font-size:18px;
+  font-weight:800;
+  letter-spacing:1px;
+  background:var(--primary-gradient);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+
+/* ===================== Responsive ===================== */
+@@media (max-width:1024px) {
+  .schedule-with-chart .modern-layout { flex-direction: column; }
+  .schedule-with-chart .chart-section { width:100%; }
+}
+
+</style>
