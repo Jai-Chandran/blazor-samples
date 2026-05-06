@@ -1,10 +1,3 @@
-#region Copyright Syncfusion® Inc. 2001-2026.
-// Copyright Syncfusion® Inc. 2001-2026. All rights reserved.
-// Use of this code is subject to the terms of our license.
-// A copy of the current license can be obtained at any time by e-mailing
-// licensing@syncfusion.com. Any infringement will be prosecuted under
-// applicable laws. 
-#endregion
 using System.Collections.Generic;
 namespace BlazorDemos
 {
@@ -167,6 +160,18 @@ namespace BlazorDemos
                 HeaderText = "Blazor Scheduler Example - Resource Filtering",
                 MetaDescription = "This Filtering demo shows dynamic filtering, display of specific resources in the Scheduler for improved resource management and focused view capabilities.",
                 IsHideInMobile = true
+            },
+            new Sample
+            {
+                Name = "Scheduler with Chart",
+                Category = "Product Use Case",
+                Directory = "Schedule/Scheduler",
+                Url = "scheduler/scheduler-with-chart",
+                FileName = "SchedulerWithChart.razor",
+                MetaTitle = "Blazor Scheduler With Chart | Data Visualization | Syncfusion",
+                HeaderText = "Blazor Scheduler Example - Event Calendar",
+                Type = SampleType.New,
+                MetaDescription = "This demo shows driver and truck details in a scheduler, with a chart that toggles to summarize each driver's capacity or trip count."
             },
             new Sample
             {
